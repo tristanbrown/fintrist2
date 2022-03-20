@@ -5,28 +5,29 @@ import arrow
 import pandas_datareader as pdr
 import pandas_market_calendars as mcal
 
+from pandas_datareader.tiingo import TiingoIEXHistoricalReader
 from alpaca_management.connect import trade_api
 from fintrist2.settings import Config
 from fintrist2.models import StockData
 
 class Stock():
-    """Contains data process results.
+    """Pulls stock price data and caches it in MongoDB.
 
-    Can act as a generic data archive.
+    freq: daily, or Xmin, or Yhour
     """
     
-    def __init__(self, symbol, interval='daily'):
+    def __init__(self, symbol, freq='daily', clearcache=False):
         self.symbol = symbol
-        self.interval = interval
+        self.freq = freq
         self.study = self.get_study()
-        self.data = self.get_data()
+        self.data = self.get_data(clearcache)
 
     def __repr__(self):
-        return f"Stock: {self.symbol}, {self.interval}"
+        return f"Stock: {self.symbol}, {self.freq}"
 
     def get_study(self):
         """"""
-        study = StockData(name=f"{self.symbol}_{self.interval}")
+        study = StockData(name=f"{self.symbol}_{self.freq}")
         return study.db_obj
 
     @property
@@ -38,17 +39,18 @@ class Stock():
         else:
             current = market_current(self.study.timestamp)
         return current
-    
-    def get_data(self):
-        if self.interval == 'daily':
+
+    def get_data(self, clearcache):
+        if self.freq == 'daily':
             pull_method = self.pull_daily
-        elif self.interval == 'intraday':
-            pull_method = self.pull_intraday
+            kwargs = {}
         else:
-            raise
-        if not self.valid:
+            pull_method = self.pull_intraday
+            kwargs = {'freq': self.freq}
+
+        if clearcache or not self.valid:
             start = time.time()
-            self.study.data = pull_method()
+            self.study.data = pull_method(**kwargs)
             self.study.save()
             timelength = time.time() - start
             print(f"Queried data in {timelength:.1f} sec")
@@ -84,6 +86,65 @@ class Stock():
             data = mock
 
         return data
+
+    def pull_intraday(self, day=None, freq='5min', tz=None, source=None, mock=None):
+        """Get intraday stock data.
+
+        ::parents:: mock
+        ::params:: symbols, day, tz, source
+        ::alerts:: source: Alpaca, source: mock
+        """
+        ## Pick the day
+        latest_day = latest_market_day(day)
+        open_time = latest_day[0].isoformat()
+        close_time = latest_day[1].isoformat()
+        if tz is None:
+            tz = Config.TZ
+
+        ## Get the data
+        if mock is not None:
+            dfs = mock
+        elif source == 'Alpaca':
+            data = trade_api.get_barset(
+                self.symbol, timeframe='minute', start=open_time, end=close_time, limit=1000)
+            missing = [symbol for symbol, records in data.items() if not records]
+            if missing:
+                raise ValueError(f"No intraday data found for symbol(s) {', '.join(missing)}.")
+            dfs = {symbol: format_stockrecords(records, tz) for symbol, records in data.items()}
+        else:
+            tiingo = TiingoIEXPriceVolume(self.symbol, api_key=Config.APIKEY_TIINGO, end=day, freq=freq)
+            dfs = tiingo.read()
+
+        if isinstance(self.symbol, str):
+            dfs = dfs.loc[self.symbol]
+
+        return dfs
+
+class TiingoIEXPriceVolume(TiingoIEXHistoricalReader):
+    """Adds volume to the Tiingo/IEX intraday pricing data."""
+
+    @property
+    def params(self):
+        """Parameters to use in API calls"""
+        return {
+            "startDate": self.start.strftime("%Y-%m-%d"),
+            "endDate": self.end.strftime("%Y-%m-%d"),
+            "resampleFreq": self.freq,
+            "format": "json",
+            "columns": "open,high,low,close,volume",
+        }
+
+def format_stockrecords(records, tz):
+    """Reformat stock tick records as a dataframe."""
+    df = pd.DataFrame.from_records(records.__dict__['_raw'])
+    df = df.rename({
+        'o': 'open', 'c': 'close',
+        'l': 'low', 'h': 'high',
+        'v': 'volume', 't': 'timestamp'}, axis=1
+    )
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True).dt.tz_convert(tz)
+    df = df.set_index('timestamp')
+    return df
 
 def market_schedule(start, end, tz=None):
     if tz is None:

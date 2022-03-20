@@ -23,6 +23,7 @@ class ConfigObj():
     DB_PORT = int(os.getenv('DB_PORT') or 27017)
     APIKEY_AV = os.getenv('APIKEY_AV')
     APIKEY_TIINGO = os.getenv('APIKEY_TIINGO')
+    APIKEY_IEX = os.getenv('APIKEY_IEX')
     TZ = os.getenv('TIMEZONE') or 'UTC'
 
 Config = ConfigObj()
