@@ -10,6 +10,7 @@ REQUIREMENTS = [
     'matplotlib',
     'python-dotenv',
     'mongoengine',
+    'blinker',
     'pymc3',
     'finta',
     'tulipy',
