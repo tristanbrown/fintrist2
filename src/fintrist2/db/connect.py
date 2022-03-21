@@ -4,7 +4,7 @@ MongoDB connection
 import os
 import mongoengine
 from mongoengine.connection import _get_db
-from .settings import Config
+from fintrist2 import Config
 
 def connect_db():
     mongoengine.disconnect()
