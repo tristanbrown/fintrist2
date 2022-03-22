@@ -1,36 +1,43 @@
 """Statistical indicators for analysis of price/volume trends."""
 import numpy as np
 
+from . import etl
+
 def simplemovingavg(df, col, window, centering=False):
     """Simple Moving Average (SMA)"""
-    return df[col].rolling(window, center=centering).mean()
+    col = etl.sanitize_cols(df, col)
+    return col.rolling(window, center=centering).mean()
 
 def sma_crossover(df, col, fastfreq, slowfreq):
     """SMA Crossover indicator"""
+    col = etl.sanitize_cols(df, col)
     sma_fast = simplemovingavg(df, col, fastfreq)
     sma_slow = simplemovingavg(df, col, slowfreq)
     return (sma_fast - sma_slow) / sma_slow * 100
 
 def pct_change(df, col1, col2):
     """Give the % change between two columns."""
-    return df[col2] / df[col1] - 1
+    col1, col2 = etl.sanitize_cols(df, col1, col2)
+    return col2 / col1 - 1
 
 def log_change(df, col1, col2):
     """Give the log change between two columns."""
-    return np.log(df[col2] / df[col1])
+    col1, col2 = etl.sanitize_cols(df, col1, col2)
+    return np.log(col2 / col1)
 
 def rate_of_return(df, col, freq=1, method='log'):
     """Give the log change in a column over time.
     
     freq: number of rows for the time interval
     """
+    col = etl.sanitize_cols(df, col)
     if method == 'log':
         rate = log_change
     elif method == 'pct':
         rate = pct_change
-    return rate(df, df[col].shift(freq), df[col]) #TODO: pass column names vs columns
+    return rate(df, col.shift(freq), col)
 
-def volatility(prices, freq=5, method='close'):
+def volatility(prices, freq=15, method='close'):
     """Close/Close volatility given by std of natural log returns.
     High/Low volatility is Parkinson volatility.
     https://www.ivolatility.com/help/3.html#:~:text=The%20Parkinson%20number%2C%20or%20High,on%20a%20fixed%20time%20interval.
