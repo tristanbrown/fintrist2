@@ -8,6 +8,11 @@ def simplemovingavg(df, col, window, centering=False):
     col = etl.sanitize_cols(df, col)
     return col.rolling(window, center=centering).mean()
 
+def expmovingavg(df, col, window):
+    """Exponential Weighted Moving Average (EMA)"""
+    col = etl.sanitize_cols(df, col)
+    return col.ewm(span=window).mean()
+
 def sma_crossover(df, col, fastfreq, slowfreq):
     """SMA Crossover indicator"""
     col = etl.sanitize_cols(df, col)
