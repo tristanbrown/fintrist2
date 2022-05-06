@@ -55,3 +55,16 @@ def volatility(prices, freq=15, method='close'):
     elif method == 'parkinson':
         HLreturns = log_change(prices, 'adjLow', 'adjHigh')
         return HLreturns.rolling(freq).std(ddof=0) / (4 * np.log(2))**(1/2) * 4
+
+def pct_vol_osc(prices, short_freq=21, long_freq=55, sig_freq=13):
+    """Percent volume oscillator.
+
+    Plot ppo and sig as lines, diff as a barchart.
+    """
+    short = expmovingavg(prices, 'adjVolume', short_freq)
+    long = expmovingavg(prices, 'adjVolume', long_freq)
+    df = prices[['adjVolume']].copy()
+    df['vol_ppo'] = (short - long) / long * 100
+    df['vol_sig'] = expmovingavg(df, 'vol_ppo', sig_freq)
+    df['vol_diff'] = df['vol_ppo'] - df['vol_sig']
+    return df
