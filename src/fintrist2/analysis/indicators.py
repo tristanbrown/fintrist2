@@ -3,21 +3,39 @@ import numpy as np
 
 from . import etl
 
-def simplemovingavg(df, col, window, centering=False):
+def sma(df, col, window, centering=False):
     """Simple Moving Average (SMA)"""
     col = etl.sanitize_cols(df, col)
     return col.rolling(window, center=centering).mean()
 
-def expmovingavg(df, col, window):
+def ema(df, col, window):
     """Exponential Weighted Moving Average (EMA)"""
     col = etl.sanitize_cols(df, col)
     return col.ewm(span=window).mean()
 
+def wwma(values, n):
+    """
+     J. Welles Wilder's EMA
+    """
+    return values.ewm(alpha=1/n, adjust=False).mean()
+
+def atr(df, n=14):
+    data = df.copy()
+    high = data['adjHigh']
+    low = data['adjLow']
+    close = data['adjClose']
+    data['tr0'] = abs(high - low)
+    data['tr1'] = abs(high - close.shift())
+    data['tr2'] = abs(low - close.shift())
+    tr = data[['tr0', 'tr1', 'tr2']].max(axis=1)
+    atr = wwma(tr, n)
+    return atr
+
 def sma_crossover(df, col, fastfreq, slowfreq):
     """SMA Crossover indicator"""
     col = etl.sanitize_cols(df, col)
-    sma_fast = simplemovingavg(df, col, fastfreq)
-    sma_slow = simplemovingavg(df, col, slowfreq)
+    sma_fast = sma(df, col, fastfreq)
+    sma_slow = sma(df, col, slowfreq)
     return (sma_fast - sma_slow) / sma_slow * 100
 
 def pct_change(df, col1, col2):
@@ -61,10 +79,10 @@ def pct_vol_osc(prices, short_freq=21, long_freq=55, sig_freq=13):
 
     Plot ppo and sig as lines, diff as a barchart.
     """
-    short = expmovingavg(prices, 'adjVolume', short_freq)
-    long = expmovingavg(prices, 'adjVolume', long_freq)
+    short = ema(prices, 'adjVolume', short_freq)
+    long = ema(prices, 'adjVolume', long_freq)
     df = prices[['adjVolume']].copy()
     df['vol_ppo'] = (short - long) / long * 100
-    df['vol_sig'] = expmovingavg(df, 'vol_ppo', sig_freq)
+    df['vol_sig'] = ema(df, 'vol_ppo', sig_freq)
     df['vol_diff'] = df['vol_ppo'] - df['vol_sig']
     return df
