@@ -85,4 +85,6 @@ def pct_vol_osc(prices, short_freq=21, long_freq=55, sig_freq=13):
     df['vol_ppo'] = (short - long) / long * 100
     df['vol_sig'] = ema(df, 'vol_ppo', sig_freq)
     df['vol_diff'] = df['vol_ppo'] - df['vol_sig']
+    df['vol_high'] = df['vol_diff'] > 0
+    df['vol_rising'] = (df['adjVolume'] - df['adjVolume'].shift(1)) > 0
     return df
